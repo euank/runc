@@ -22,9 +22,11 @@ import (
 )
 
 type Manager struct {
-	mu      sync.Mutex
-	Cgroups *configs.Cgroup
-	Paths   map[string]string
+	mu             sync.Mutex
+	Cgroups        *configs.Cgroup
+	Paths          map[string]string
+	cgroupPathOnce sync.Once
+	rootCgroupPath string
 }
 
 type subsystem interface {
@@ -384,11 +386,9 @@ func getSubsystemPath(c *configs.Cgroup, subsystem string) (string, error) {
 		return "", err
 	}
 
-	initPath, err := cgroups.GetInitCgroupDir(subsystem)
-	if err != nil {
-		return "", err
-	}
-
+	// TODO use the dbus call to get the right system.slice instead of defaulting
+	// to this string.
+	// (org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/system_2eslice org.freedesktop.systemd1.Slice ControlGroup)
 	slice := "system.slice"
 	if c.Parent != "" {
 		slice = c.Parent
@@ -399,7 +399,7 @@ func getSubsystemPath(c *configs.Cgroup, subsystem string) (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(mountpoint, initPath, slice, getUnitName(c)), nil
+	return filepath.Join(mountpoint, slice, getUnitName(c)), nil
 }
 
 func (m *Manager) Freeze(state configs.FreezerState) error {
@@ -473,6 +473,19 @@ func (m *Manager) Set(container *configs.Config) error {
 		}
 	}
 	return nil
+}
+
+func (m *Manager) rootCgroup() string {
+	m.cgroupPathOnce.Do(func() {
+		s, err := theConn.GetManagerProperty("/org/freedesktop/systemd1/unit/system_2eslice")
+		if err == nil {
+			m.rootCgroupPath = s
+		} else {
+			fmt.Println(err)
+		}
+		// org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/system_2eslice org.freedesktop.systemd1.Slice ControlGroup
+	})
+	return m.rootCgroupPath
 }
 
 func getUnitName(c *configs.Cgroup) string {
