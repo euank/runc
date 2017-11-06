@@ -331,3 +331,35 @@ func TestGetClosestMountpointAncestor(t *testing.T) {
 		}
 	}
 }
+
+func TestFindCgroupMountpoint(t *testing.T) {
+	testCases := []struct {
+		mountInfos string
+		root       string
+		err        error
+	}{
+		{
+			mountInfos: fedoraMountinfo,
+			root:       "/sys/fs/cgroup",
+		},
+		{
+			mountInfos: "",
+			err:        NewNotFoundError("cgroup"),
+		},
+	}
+
+	for i, tc := range testCases {
+		root, err := findCgroupMountpointDirHelper(strings.NewReader(tc.mountInfos))
+		if tc.err != nil {
+			if err.Error() != tc.err.Error() {
+				t.Errorf("[case %d] Expected error of %v, got error of %v", i, tc.err, err)
+			}
+			continue
+		}
+
+		if tc.root != root {
+			t.Errorf("[case %d] Expected root of %s, got root of %s", i, tc.root, root)
+		}
+	}
+
+}

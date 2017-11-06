@@ -88,9 +88,12 @@ func FindCgroupMountpointDir() (string, error) {
 		return "", err
 	}
 	defer f.Close()
+	return findCgroupMountpointDirHelper(f)
+}
 
+func findCgroupMountpointDirHelper(r io.Reader) (string, error) {
 	var shortestCgroup string
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		text := scanner.Text()
 		fields := strings.Split(text, " ")
