@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	cgroupNamePrefix = "name="
-	CgroupProcesses  = "cgroup.procs"
+	cgroupNamePrefix    = "name="
+	CgroupProcesses     = "cgroup.procs"
+	preferredCgroupName = "/sys/fs/cgroup"
 )
 
 // https://www.kernel.org/doc/Documentation/cgroup-v1/cgroups.txt
@@ -88,6 +89,7 @@ func FindCgroupMountpointDir() (string, error) {
 	}
 	defer f.Close()
 
+	var shortestCgroup string
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		text := scanner.Text()
@@ -108,13 +110,22 @@ func FindCgroupMountpointDir() (string, error) {
 				return "", fmt.Errorf("Error found less than 3 fields post '-' in %q", text)
 			}
 
-			return filepath.Dir(fields[4]), nil
+			possibleCgroupDir := filepath.Dir(fields[4])
+			if possibleCgroupDir == preferredCgroupName {
+				return possibleCgroupDir, nil
+			}
+			if shortestCgroup == "" || len(possibleCgroupDir) < len(shortestCgroup) {
+				shortestCgroup = possibleCgroupDir
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
 
+	if shortestCgroup != "" {
+		return shortestCgroup, nil
+	}
 	return "", NewNotFoundError("cgroup")
 }
 
